@@ -1,0 +1,45 @@
+{
+  "name": "youtube-pure-player",
+  "version": "1.0.0",
+  "description": "YouTube Pure Player：极简视频播放器，仅显示画面，可登录，内置广告屏蔽",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "build": {
+    "appId": "com.purebox.youtube",
+    "productName": "YouTube Pure Player",
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "build/icon.ico",
+      "build/icon.png"
+    ],
+    "directories": {
+      "buildResources": "build"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
+    }
+  },
+  "devDependencies": {
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.35.2"
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.18.0",
+    "cross-fetch": "^4.1.0"
+  }
+}
