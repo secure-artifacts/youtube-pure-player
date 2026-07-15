@@ -184,6 +184,10 @@ html:not(.ypp-omni-open)::-webkit-scrollbar {
   background: #c0392b;
   border-color: #c0392b;
 }
+#ypp-wincontrols button.ypp-on {
+  background: #c0392b;
+  border-color: #e74c3c;
+}
 
 /* 左下角音量控制：平时透明且不可点击，鼠标移到左下角才淡入。 */
 #ypp-volctrl {
@@ -521,6 +525,19 @@ function ensureWinControls() {
   });
   wrap.appendChild(fit);
 
+  const closeOnEnd = document.createElement('button');
+  closeOnEnd.id = 'ypp-close-on-end-btn';
+  closeOnEnd.textContent = '⏹';
+  closeOnEnd.title = t('closeOnEndTitle');
+  if (closeOnEndEnabled()) closeOnEnd.classList.add('ypp-on');
+  closeOnEnd.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const on = !closeOnEndEnabled();
+    setCloseOnEnd(on);
+    toast(on ? t('closeOnEndOn') : t('closeOnEndOff'));
+  });
+  wrap.appendChild(closeOnEnd);
+
   const settings = document.createElement('button');
   settings.textContent = '⚙';
   settings.title = '设置 (Ctrl+L)';
@@ -776,7 +793,7 @@ function bindCloseHover() {
   document.addEventListener('mousemove', (e) => {
     const wrap = document.getElementById('ypp-wincontrols');
     if (!wrap) return;
-    const inCorner = e.clientX >= window.innerWidth - 340 && e.clientY <= 60;
+    const inCorner = e.clientX >= window.innerWidth - 390 && e.clientY <= 60;
     if (inCorner) wrap.classList.add('show');
     else wrap.classList.remove('show');
   });
@@ -805,6 +822,10 @@ const I18N = {
     adblock: '去广告（屏蔽广告）',
     adblockOn: '去广告：已开启',
     adblockOff: '去广告：已关闭',
+    closeOnEnd: '播放完后关闭软件',
+    closeOnEndOn: '播放完后关闭：已开启',
+    closeOnEndOff: '播放完后关闭：已关闭',
+    closeOnEndTitle: '播放完后关闭软件',
     ph: '粘贴 YouTube 链接 / 视频ID / 搜索词，回车打开 · Esc 取消',
     hint: 'Ctrl+L 输入链接 · Ctrl+H 切换纯净模式 · F11 全屏',
     pureOn: '纯净模式：开',
@@ -848,6 +869,10 @@ const I18N = {
     adblock: 'Block ads',
     adblockOn: 'Ad blocking: ON',
     adblockOff: 'Ad blocking: OFF',
+    closeOnEnd: 'Close app when video ends',
+    closeOnEndOn: 'Close when ended: ON',
+    closeOnEndOff: 'Close when ended: OFF',
+    closeOnEndTitle: 'Close app when video ends',
     ph: 'Paste a YouTube link / video ID / search term, Enter to open · Esc to cancel',
     hint: 'Ctrl+L address bar · Ctrl+H toggle clean mode · F11 fullscreen',
     pureOn: 'Clean mode: ON',
@@ -896,6 +921,23 @@ const I18N = {
     adblock: 'Блокировка рекламы',
     adblockOn: 'Блокировка рекламы: ВКЛ',
     adblockOff: 'Блокировка рекламы: ВЫКЛ',
+    closeOnEnd: 'Закрыть приложение после воспроизведения',
+    closeOnEndOn: 'Закрытие после воспроизведения: ВКЛ',
+    closeOnEndOff: 'Закрытие после воспроизведения: ВЫКЛ',
+    closeOnEndTitle: 'Закрыть приложение после воспроизведения',
+    volTitle: 'Громкость (нажмите, чтобы выкл./вкл. звук)',
+    clipTitle: 'Таймер фрагмента (с A до B, затем пауза/закрытие)',
+    clipFrom: 'С',
+    clipTo: 'До',
+    clipThen: 'Затем',
+    clipPause: 'Пауза',
+    clipClose: 'Закрыть приложение',
+    clipGo: 'Старт',
+    clipClear: 'Сбросить',
+    clipSet: 'Таймер фрагмента задан',
+    clipCleared: 'Таймер фрагмента сброшен',
+    clipInvalid: 'Неверный формат времени (мм:сс или секунды)',
+    clipDonePause: 'Достигнуто время окончания, пауза',
     pureTitle: 'Переключить чистый режим (Ctrl+H)',
     fitTitle: 'Режим заполнения картинки',
     fitContain: 'Картинка: сохранять пропорции (с полосами)',
@@ -926,6 +968,23 @@ const I18N = {
     adblock: 'Bloquer les pubs',
     adblockOn: 'Blocage des pubs : ACTIVÉ',
     adblockOff: 'Blocage des pubs : DÉSACTIVÉ',
+    closeOnEnd: 'Fermer l’appli à la fin de la vidéo',
+    closeOnEndOn: 'Fermer à la fin : ACTIVÉ',
+    closeOnEndOff: 'Fermer à la fin : DÉSACTIVÉ',
+    closeOnEndTitle: 'Fermer l’appli à la fin de la vidéo',
+    volTitle: 'Volume (cliquer pour couper / rétablir)',
+    clipTitle: 'Extrait chronométré (de A à B, puis pause/fermeture)',
+    clipFrom: 'De',
+    clipTo: 'À',
+    clipThen: 'Ensuite',
+    clipPause: 'Pause',
+    clipClose: 'Fermer l’appli',
+    clipGo: 'Démarrer',
+    clipClear: 'Effacer',
+    clipSet: 'Extrait chronométré défini',
+    clipCleared: 'Extrait chronométré effacé',
+    clipInvalid: 'Format d’heure invalide (mm:ss ou secondes)',
+    clipDonePause: 'Fin atteinte, en pause',
     pureTitle: 'Basculer le mode épuré (Ctrl+H)',
     fitTitle: 'Mode de remplissage de l’image',
     fitContain: 'Image : garder les proportions (bandes noires)',
@@ -956,6 +1015,23 @@ const I18N = {
     adblock: 'Bloquear anuncios',
     adblockOn: 'Bloqueo de anuncios: ACTIVADO',
     adblockOff: 'Bloqueo de anuncios: DESACTIVADO',
+    closeOnEnd: 'Cerrar la app al terminar el vídeo',
+    closeOnEndOn: 'Cerrar al terminar: ACTIVADO',
+    closeOnEndOff: 'Cerrar al terminar: DESACTIVADO',
+    closeOnEndTitle: 'Cerrar la app al terminar el vídeo',
+    volTitle: 'Volumen (clic para silenciar / reactivar)',
+    clipTitle: 'Fragmento temporizado (de A a B, luego pausa/cerrar)',
+    clipFrom: 'Desde',
+    clipTo: 'Hasta',
+    clipThen: 'Luego',
+    clipPause: 'Pausa',
+    clipClose: 'Cerrar la app',
+    clipGo: 'Iniciar',
+    clipClear: 'Borrar',
+    clipSet: 'Fragmento temporizado establecido',
+    clipCleared: 'Fragmento temporizado borrado',
+    clipInvalid: 'Formato de tiempo inválido (mm:ss o segundos)',
+    clipDonePause: 'Se alcanzó el final, en pausa',
     pureTitle: 'Alternar modo limpio (Ctrl+H)',
     fitTitle: 'Modo de relleno de imagen',
     fitContain: 'Imagen: mantener proporción (con bordes)',
@@ -986,6 +1062,23 @@ const I18N = {
     adblock: 'Блокування реклами',
     adblockOn: 'Блокування реклами: УВІМК',
     adblockOff: 'Блокування реклами: ВИМК',
+    closeOnEnd: 'Закрити програму після відтворення',
+    closeOnEndOn: 'Закриття після відтворення: УВІМК',
+    closeOnEndOff: 'Закриття після відтворення: ВИМК',
+    closeOnEndTitle: 'Закрити програму після відтворення',
+    volTitle: 'Гучність (натисніть, щоб вимк./увімк. звук)',
+    clipTitle: 'Таймер фрагмента (з A до B, потім пауза/закриття)',
+    clipFrom: 'З',
+    clipTo: 'До',
+    clipThen: 'Потім',
+    clipPause: 'Пауза',
+    clipClose: 'Закрити програму',
+    clipGo: 'Старт',
+    clipClear: 'Скинути',
+    clipSet: 'Таймер фрагмента задано',
+    clipCleared: 'Таймер фрагмента скинуто',
+    clipInvalid: 'Невірний формат часу (хх:сс або секунди)',
+    clipDonePause: 'Досягнуто кінцевого часу, пауза',
     pureTitle: 'Перемкнути чистий режим (Ctrl+H)',
     fitTitle: 'Режим заповнення зображення',
     fitContain: 'Зображення: зберігати пропорції (зі смугами)',
@@ -1016,6 +1109,23 @@ const I18N = {
     adblock: 'რეკლამის დაბლოკვა',
     adblockOn: 'რეკლამის დაბლოკვა: ჩართ.',
     adblockOff: 'რეკლამის დაბლოკვა: გამორთ.',
+    closeOnEnd: 'დახურვა ვიდეოს დასრულებისას',
+    closeOnEndOn: 'დასრულებისას დახურვა: ჩართ.',
+    closeOnEndOff: 'დასრულებისას დახურვა: გამორთ.',
+    closeOnEndTitle: 'დახურვა ვიდეოს დასრულებისას',
+    volTitle: 'ხმა (დააჭირეთ ჩასახშობად / ჩასართავად)',
+    clipTitle: 'დროის ფрагმენტი (A-დან B-მდე, შემდეგ პაუზა/დახურვა)',
+    clipFrom: 'დან',
+    clipTo: 'მდე',
+    clipThen: 'შემდეგ',
+    clipPause: 'პაუზა',
+    clipClose: 'აპის დახურვა',
+    clipGo: 'დაწყება',
+    clipClear: 'გასუფთავება',
+    clipSet: 'დროის ფрагმენტი დაყენებულია',
+    clipCleared: 'დროის ფრაგმენტი გასუფთავდა',
+    clipInvalid: 'დროის არასწორი ფორმატი (წთ:წმ ან წამები)',
+    clipDonePause: 'დასრულების დრომდე მივედით, პაუზა',
     pureTitle: 'სუფთა რეჟიმის გადართვა (Ctrl+H)',
     fitTitle: 'სურათის შევსების რეჟიმი',
     fitContain: 'სურათი: პროპორციის შენარჩუნება (ზოლებით)',
@@ -1046,6 +1156,23 @@ const I18N = {
     adblock: 'Գովազդի արգելափակում',
     adblockOn: 'Գովազդի արգելափակում՝ ՄԻԱՑ.',
     adblockOff: 'Գովազդի արգելափակում՝ ԱՆՋ.',
+    closeOnEnd: 'Փակել հավելվածը տեսանյութից հետո',
+    closeOnEndOn: 'Ավարտից հետո փակում՝ ՄԻԱՑ.',
+    closeOnEndOff: 'Ավարտից հետո փակում՝ ԱՆՋ.',
+    closeOnEndTitle: 'Փակել հավելվածը տեսանյութից հետո',
+    volTitle: 'Ձայն (սեղմեք խլացնելու / վերականգնելու համար)',
+    clipTitle: 'Ժամանակային հատված (A-ից B, ապա դադար/փակում)',
+    clipFrom: 'Սկսած',
+    clipTo: 'Մինչև',
+    clipThen: 'Ապա',
+    clipPause: 'Դադար',
+    clipClose: 'Փակել հավելվածը',
+    clipGo: 'Սկսել',
+    clipClear: 'Մաքրել',
+    clipSet: 'Ժամանակային հատվածը սահմանված է',
+    clipCleared: 'Ժամանակային հատվածը մաքրված է',
+    clipInvalid: 'Անվավեր ժամանակի ձևաչափ (րոպե:վայրկյան կամ վայրկյան)',
+    clipDonePause: 'Հասել է ավարտի ժամանակին, դադար',
     pureTitle: 'Փոխարկել մաքուր ռեժիմը (Ctrl+H)',
     fitTitle: 'Պատկերի լցման ռեժիմ',
     fitContain: 'Պատկեր՝ պահպանել համամասնությունը (շերտերով)',
@@ -1076,6 +1203,23 @@ const I18N = {
     adblock: 'Sakana dokambarotra',
     adblockOn: 'Sakana dokambarotra: MISOKATRA',
     adblockOff: 'Sakana dokambarotra: MIKATONA',
+    closeOnEnd: 'Hidio ny app aorian’ny fampisehoana',
+    closeOnEndOn: 'Hidio aorian’ny farany: MISOKATRA',
+    closeOnEndOff: 'Hidio aorian’ny farany: MIKATONA',
+    closeOnEndTitle: 'Hidio ny app aorian’ny fampisehoana',
+    volTitle: 'Volume (tsindrio hanampiana / hamerenana feo)',
+    clipTitle: 'Ampahany voafetra fotoana (A → B, avy eo miato/hidio)',
+    clipFrom: 'Avy amin’ny',
+    clipTo: 'Hatramin’ny',
+    clipThen: 'Avy eo',
+    clipPause: 'Miato',
+    clipClose: 'Hidio ny app',
+    clipGo: 'Atombohy',
+    clipClear: 'Fafao',
+    clipSet: 'Ampahany voafetra fotoana voapetraka',
+    clipCleared: 'Ampahany voafetra fotoana voafafa',
+    clipInvalid: 'Endrika ora diso (mm:ss na segondra)',
+    clipDonePause: 'Tonga tamin’ny farany, miato',
     pureTitle: 'Ovay ny fomba madio (Ctrl+H)',
     fitTitle: 'Fomba famenoana sary',
     fitContain: 'Sary: tehirizo ny refy (misy mainty)',
@@ -1270,10 +1414,24 @@ function buildOmnibox() {
   adRow.appendChild(adChk);
   adRow.appendChild(adSpan);
 
+  // 播放完后关闭软件
+  const endRow = document.createElement('label');
+  endRow.className = 'ypp-toggle';
+  const endChk = document.createElement('input');
+  endChk.type = 'checkbox';
+  endChk.id = 'ypp-close-on-end-chk';
+  endChk.checked = closeOnEndEnabled();
+  const endSpan = document.createElement('span');
+  endSpan.dataset.i18n = 'closeOnEnd';
+  endSpan.textContent = t('closeOnEnd');
+  endRow.appendChild(endChk);
+  endRow.appendChild(endSpan);
+
   panel.appendChild(input);
   panel.appendChild(langs);
   panel.appendChild(devices);
   panel.appendChild(adRow);
+  panel.appendChild(endRow);
   box.appendChild(panel);
   document.body.appendChild(box);
 
@@ -1281,6 +1439,10 @@ function buildOmnibox() {
     localStorage.setItem('ypp-adblock', e.target.checked ? '1' : '0');
     applyAdblock();
     toast(e.target.checked ? t('adblockOn') : t('adblockOff'));
+  });
+  endChk.addEventListener('change', (e) => {
+    setCloseOnEnd(!!e.target.checked);
+    toast(e.target.checked ? t('closeOnEndOn') : t('closeOnEndOff'));
   });
 
   // 定时片段播放：从 A 到 B，到点后暂停 / 关闭软件
@@ -1537,6 +1699,49 @@ function applyAdblock() {
   ipcRenderer.send('set-adblock', on);
 }
 
+// --------------------------------------------------------------------------
+// 播放完后关闭软件（设置面板开关 / 右上角 ⏹ 按钮，状态会记住）
+// --------------------------------------------------------------------------
+function closeOnEndEnabled() {
+  return localStorage.getItem('ypp-close-on-end') === '1';
+}
+
+function setCloseOnEnd(on) {
+  localStorage.setItem('ypp-close-on-end', on ? '1' : '0');
+  const btn = document.getElementById('ypp-close-on-end-btn');
+  if (btn) {
+    btn.classList.toggle('ypp-on', on);
+    btn.title = t('closeOnEndTitle');
+  }
+  const chk = document.getElementById('ypp-close-on-end-chk');
+  if (chk) chk.checked = on;
+}
+
+let closeOnEndStarted = false;
+function setupCloseOnEnd() {
+  if (closeOnEndStarted) return;
+  closeOnEndStarted = true;
+  document.addEventListener(
+    'ended',
+    (e) => {
+      if (!closeOnEndEnabled()) return;
+      const v = e.target;
+      if (!v || v.tagName !== 'VIDEO') return;
+      // 广告结束不要关软件，只在正片播完时关闭
+      const player = v.closest('.html5-video-player');
+      if (
+        player &&
+        (player.classList.contains('ad-showing') ||
+          player.classList.contains('ad-interrupting'))
+      ) {
+        return;
+      }
+      ipcRenderer.send('win-close');
+    },
+    true
+  );
+}
+
 let adSkipperStarted = false;
 function setupAdSkipper() {
   if (adSkipperStarted) return;
@@ -1743,6 +1948,7 @@ document.addEventListener('DOMContentLoaded', () => {
   bindOutsideClose();
   applyAdblock();
   setupAdSkipper();
+  setupCloseOnEnd();
   apply();
   // 持续上报视频比例（不同视频比例不同 / 播放器可能被重建）
   setInterval(reportAspect, 700);
