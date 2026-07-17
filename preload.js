@@ -37,8 +37,24 @@ html.ypp-adblock .ytp-ad-overlay-slot,                           /* 播放器内
 html.ypp-adblock .ytp-ad-overlay-container,
 html.ypp-adblock .ytp-ad-message-container,
 html.ypp-adblock .ytp-suggested-action,
+html.ypp-adblock .ytp-ad-player-overlay,
+html.ypp-adblock .ytp-ad-player-overlay-layout,
+html.ypp-adblock .ytp-ad-player-overlay-instream-info,
+html.ypp-adblock .ytp-ad-text,
+html.ypp-adblock .ytp-ad-preview-container,
+html.ypp-adblock .ytp-ad-image,
+html.ypp-adblock .ytp-ad-feedback-dialog-container,
+html.ypp-adblock ytd-player-legacy-desktop-watch-ads-renderer,
+html.ypp-adblock ytd-ad-slot-renderer,
+html.ypp-adblock #masthead-ad,
+html.ypp-adblock .ytd-ad-slot-renderer,
 html.ypp-adblock ytmusic-statement-banner-renderer {
   display: none !important;
+}
+/* 广告播放期间画面变黑，避免闪过广告画面 */
+html.ypp-adblock .html5-video-player.ad-showing video,
+html.ypp-adblock .html5-video-player.ad-interrupting video {
+  opacity: 0 !important;
 }
 
 /* ===== 纯净模式：只看视频 ===== */
@@ -538,6 +554,28 @@ function ensureWinControls() {
   });
   wrap.appendChild(closeOnEnd);
 
+  // 右上角静音按钮
+  const muteBtn = document.createElement('button');
+  muteBtn.id = 'ypp-mute-btn';
+  muteBtn.title = t('muteTitle');
+  const mutedNow = isUserMuted();
+  muteBtn.textContent = mutedNow ? '🔇' : '🔊';
+  if (mutedNow) muteBtn.classList.add('ypp-on');
+  muteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleUserMute();
+  });
+  wrap.appendChild(muteBtn);
+
+  // 按住可拖动窗口（frameless 窗口用 -webkit-app-region: drag）
+  const dragBtn = document.createElement('button');
+  dragBtn.id = 'ypp-drag-btn';
+  dragBtn.textContent = '⠿';
+  dragBtn.title = t('dragTitle');
+  dragBtn.style.webkitAppRegion = 'drag';
+  dragBtn.style.cursor = 'move';
+  wrap.appendChild(dragBtn);
+
   const settings = document.createElement('button');
   settings.textContent = '⚙';
   settings.title = '设置 (Ctrl+L)';
@@ -575,9 +613,12 @@ function setVolume(v) {
   const vid = document.querySelector('video');
   if (vid) {
     vid.volume = v / 100;
-    vid.muted = v === 0;
+    vid.muted = v === 0 || isUserMuted();
   }
   localStorage.setItem('ypp-vol', String(v));
+  if (v === 0) localStorage.setItem('ypp-muted', '1');
+  else if (!isUserMuted()) localStorage.setItem('ypp-muted', '0');
+  syncMuteBtn();
 }
 
 function savedVolume() {
@@ -585,8 +626,51 @@ function savedVolume() {
   return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : null;
 }
 
+function isUserMuted() {
+  return localStorage.getItem('ypp-muted') === '1';
+}
+
+function syncMuteBtn() {
+  const btn = document.getElementById('ypp-mute-btn');
+  if (!btn) return;
+  const muted = isUserMuted();
+  btn.textContent = muted ? '🔇' : '🔊';
+  btn.classList.toggle('ypp-on', muted);
+  btn.title = t('muteTitle');
+}
+
+function applyMuteState() {
+  const muted = isUserMuted();
+  const p = ytPlayer();
+  const vid = document.querySelector('video');
+  try {
+    if (muted) {
+      if (p && typeof p.mute === 'function') p.mute();
+      if (vid) vid.muted = true;
+    } else {
+      // 广告期间绝不取消静音
+      if (document.documentElement.classList.contains('ypp-ad-active')) return;
+      if (p && typeof p.unMute === 'function') p.unMute();
+      if (vid) {
+        const vol = savedVolume();
+        if (vol != null) vid.volume = vol / 100;
+        vid.muted = false;
+      }
+    }
+  } catch (_) {}
+  syncMuteBtn();
+  syncVolUI(savedVolume() == null ? 50 : savedVolume());
+}
+
+function toggleUserMute() {
+  const on = !isUserMuted();
+  localStorage.setItem('ypp-muted', on ? '1' : '0');
+  applyMuteState();
+  toast(on ? t('muteOn') : t('muteOff'));
+}
+
 function volIcon(v) {
-  if (v <= 0) return '🔇';
+  if (v <= 0 || isUserMuted()) return '🔇';
   if (v < 50) return '🔉';
   return '🔊';
 }
@@ -635,27 +719,28 @@ function ensureVolControls() {
   });
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const cur = parseInt(slider.value, 10) || 0;
-    const v = cur > 0 ? 0 : (lastNonZeroVol || 50);
-    setVolume(v);
-    syncVolUI(v);
+    toggleUserMute();
   });
 
   document.body.appendChild(wrap);
   syncVolUI(init == null ? 50 : init);
+  syncMuteBtn();
 }
 
 // 启动时把保存的音量同步给当前播放器（播放器可能稍后才就绪）
 let volRestored = false;
 function restoreVolume() {
   const v = savedVolume();
-  if (v == null) return;
-  if (v > 0) lastNonZeroVol = v;
+  if (v == null && !isUserMuted()) return;
+  if (v != null && v > 0) lastNonZeroVol = v;
   const p = ytPlayer();
   const vid = document.querySelector('video');
   if (p || vid) {
-    setVolume(v);
-    syncVolUI(v);
+    if (v != null) {
+      setVolume(v);
+      syncVolUI(v);
+    }
+    applyMuteState();
     volRestored = true;
   }
 }
@@ -793,7 +878,7 @@ function bindCloseHover() {
   document.addEventListener('mousemove', (e) => {
     const wrap = document.getElementById('ypp-wincontrols');
     if (!wrap) return;
-    const inCorner = e.clientX >= window.innerWidth - 390 && e.clientY <= 60;
+    const inCorner = e.clientX >= window.innerWidth - 480 && e.clientY <= 60;
     if (inCorner) wrap.classList.add('show');
     else wrap.classList.remove('show');
   });
@@ -826,6 +911,10 @@ const I18N = {
     closeOnEndOn: '播放完后关闭：已开启',
     closeOnEndOff: '播放完后关闭：已关闭',
     closeOnEndTitle: '播放完后关闭软件',
+    muteTitle: '静音 / 取消静音',
+    muteOn: '已静音',
+    muteOff: '已取消静音',
+    dragTitle: '按住拖动窗口',
     ph: '粘贴 YouTube 链接 / 视频ID / 搜索词，回车打开 · Esc 取消',
     hint: 'Ctrl+L 输入链接 · Ctrl+H 切换纯净模式 · F11 全屏',
     pureOn: '纯净模式：开',
@@ -873,6 +962,10 @@ const I18N = {
     closeOnEndOn: 'Close when ended: ON',
     closeOnEndOff: 'Close when ended: OFF',
     closeOnEndTitle: 'Close app when video ends',
+    muteTitle: 'Mute / Unmute',
+    muteOn: 'Muted',
+    muteOff: 'Unmuted',
+    dragTitle: 'Hold to drag window',
     ph: 'Paste a YouTube link / video ID / search term, Enter to open · Esc to cancel',
     hint: 'Ctrl+L address bar · Ctrl+H toggle clean mode · F11 fullscreen',
     pureOn: 'Clean mode: ON',
@@ -1747,59 +1840,153 @@ function setupAdSkipper() {
   if (adSkipperStarted) return;
   adSkipperStarted = true;
 
-  let adActive = false; // 标记是我们因广告临时改了静音/倍速，结束后好还原
-  let observed = null; // 已挂监听的播放器元素
+  let adActive = false; // 当前是否因广告强制静音/倍速
+  let observed = null;
+  let savedVolBeforeAd = null; // 广告前的音量，结束后还原
 
-  const isAdShowing = (player) =>
-    !!player &&
-    (player.classList.contains('ad-showing') ||
-      player.classList.contains('ad-interrupting'));
+  const isAdShowing = (player) => {
+    if (!player) return false;
+    if (
+      player.classList.contains('ad-showing') ||
+      player.classList.contains('ad-interrupting')
+    ) {
+      return true;
+    }
+    // 额外信号：广告遮罩 / 跳过按钮 / 广告倒计时
+    if (
+      player.querySelector(
+        '.ytp-ad-player-overlay, .ytp-ad-player-overlay-layout, .ytp-ad-text, .ytp-ad-preview-container, .ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern'
+      )
+    ) {
+      return true;
+    }
+    try {
+      if (typeof player.getPlayerResponse === 'function') {
+        const r = player.getPlayerResponse();
+        if (r && r.adPlacements && r.adPlacements.length) {
+          // 有广告配置不代表正在播，仅作辅助；主要靠 class
+        }
+      }
+    } catch (_) {}
+    return false;
+  };
+
+  const forceMuteAd = (player, video) => {
+    document.documentElement.classList.add('ypp-ad-active');
+    if (video) {
+      try {
+        video.muted = true;
+        video.volume = 0;
+        video.playbackRate = 16;
+        if (isFinite(video.duration) && video.duration > 0) {
+          try {
+            video.currentTime = Math.max(0, video.duration - 0.05);
+          } catch (_) {}
+        }
+      } catch (_) {}
+    }
+    try {
+      if (player && typeof player.mute === 'function') player.mute();
+      if (player && typeof player.setVolume === 'function') player.setVolume(0);
+    } catch (_) {}
+  };
+
+  const restoreAfterAd = (player, video) => {
+    document.documentElement.classList.remove('ypp-ad-active');
+    if (video) {
+      try {
+        video.playbackRate = 1;
+      } catch (_) {}
+    }
+    // 用户手动静音：保持静音；否则立刻恢复正常音量
+    if (isUserMuted()) {
+      try {
+        if (video) {
+          video.muted = true;
+          video.volume = 0;
+        }
+        if (player && typeof player.mute === 'function') player.mute();
+      } catch (_) {}
+    } else {
+      const vol =
+        savedVolBeforeAd != null
+          ? savedVolBeforeAd
+          : savedVolume() != null
+            ? savedVolume()
+            : 50;
+      try {
+        if (video) {
+          video.volume = vol / 100;
+          video.muted = false;
+        }
+        if (player && typeof player.unMute === 'function') player.unMute();
+        if (player && typeof player.setVolume === 'function') player.setVolume(vol);
+      } catch (_) {}
+      syncVolUI(vol);
+    }
+    savedVolBeforeAd = null;
+    syncMuteBtn();
+  };
+
+  const clickSkip = () => {
+    document
+      .querySelectorAll(
+        [
+          '.ytp-ad-skip-button',
+          '.ytp-ad-skip-button-modern',
+          '.ytp-skip-ad-button',
+          '.ytp-ad-skip-button-container button',
+          '.ytp-ad-skip-button-slot button',
+          'button.ytp-ad-skip-button-modern',
+          '.ytp-ad-survey-questions button',
+          '.ytp-ad-overlay-close-button',
+          '.ytp-ad-overlay-close-container button',
+          '.videoAdUiSkipButton',
+          '.ytp-ad-action-interstitial-action-button',
+        ].join(',')
+      )
+      .forEach((b) => {
+        try {
+          b.click();
+        } catch (_) {}
+      });
+  };
 
   const handle = () => {
     try {
       const player = document.querySelector('.html5-video-player');
-      const video = player ? player.querySelector('video') : null;
+      const video = player ? player.querySelector('video') : document.querySelector('video');
 
-      // 关闭去广告时：还原我们改过的倍速/静音后退出
       if (!adblockEnabled()) {
-        if (adActive && video) {
-          video.playbackRate = 1;
-          video.muted = false;
+        if (adActive) {
+          restoreAfterAd(player, video);
+          adActive = false;
         }
-        adActive = false;
         return;
       }
 
       if (isAdShowing(player)) {
-        // 第一时间静音，尽量不让广告发出声音
-        if (video) {
-          video.muted = true;
-          video.playbackRate = 16;
-          if (isFinite(video.duration) && video.duration > 0) {
-            video.currentTime = video.duration; // 直接快进到广告结尾
-          }
+        if (!adActive) {
+          // 记住广告前音量，结束后还原；广告期间绝不放声
+          const cur =
+            savedVolume() != null
+              ? savedVolume()
+              : video
+                ? Math.round((video.volume || 0) * 100)
+                : 50;
+          savedVolBeforeAd = cur;
           adActive = true;
         }
-        // 点击各种“跳过广告”按钮
-        document
-          .querySelectorAll(
-            '.ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-skip-ad-button, .ytp-ad-skip-button-container button, .ytp-ad-survey-questions button'
-          )
-          .forEach((b) => b.click());
+        forceMuteAd(player, video);
+        clickSkip();
       } else {
-        // 关闭播放器内悬浮广告
-        document
-          .querySelectorAll('.ytp-ad-overlay-close-button, .ytp-ad-overlay-close-container')
-          .forEach((b) => b.click());
-        // 广告结束：还原倍速/静音，避免正片被加速或静音
-        if (adActive && video) {
-          video.playbackRate = 1;
-          video.muted = false;
+        clickSkip(); // 清掉残留悬浮广告
+        if (adActive) {
+          restoreAfterAd(player, video);
           adActive = false;
         }
       }
 
-      // 给播放器挂一个 class 变化监听：广告类一出现就立刻处理（毫秒级）
       if (player && observed !== player) {
         observed = player;
         new MutationObserver(handle).observe(player, {
@@ -1810,22 +1997,41 @@ function setupAdSkipper() {
     } catch (_) {}
   };
 
-  // 捕获所有媒体的 play 事件：广告一开始播放就立刻静音/跳过，消除“1 秒广告声”
+  // 广告一 play 立刻静音（抢在声音出来前）
   document.addEventListener(
     'play',
     (e) => {
-      if (e.target && e.target.tagName === 'VIDEO') {
-        const player = e.target.closest('.html5-video-player');
-        if (adblockEnabled() && isAdShowing(player)) {
-          e.target.muted = true; // 同步静音，先于音频输出
-        }
-        handle();
+      if (!e.target || e.target.tagName !== 'VIDEO') return;
+      if (!adblockEnabled()) return;
+      const player = e.target.closest('.html5-video-player');
+      if (isAdShowing(player) || document.documentElement.classList.contains('ypp-ad-active')) {
+        forceMuteAd(player, e.target);
+      }
+      handle();
+    },
+    true
+  );
+
+  // 广告期间若 YouTube 试图取消静音 / 改音量，立刻压回去
+  document.addEventListener(
+    'volumechange',
+    (e) => {
+      if (!adblockEnabled()) return;
+      if (!e.target || e.target.tagName !== 'VIDEO') return;
+      const player = e.target.closest('.html5-video-player');
+      if (
+        adActive ||
+        isAdShowing(player) ||
+        document.documentElement.classList.contains('ypp-ad-active')
+      ) {
+        forceMuteAd(player, e.target);
       }
     },
     true
   );
 
-  setInterval(handle, 100);
+  // 更密的轮询：尽量消灭“1 秒广告声”
+  setInterval(handle, 50);
   handle();
 }
 

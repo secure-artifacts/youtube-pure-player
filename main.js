@@ -71,14 +71,23 @@ async function setupAdBlocker(ses) {
       }
     );
 
-    // 放行 YouTube / Google 视频自身的第一方请求，避免误杀核心脚本与遥测端点
+    // 仅放行真正的媒体/图片 CDN；不要整站放行 youtube.com，否则 pagead 等广告接口也会漏过
     try {
       await engine.updateFromDiff({
         added: [
-          '@@||youtube.com^$~third-party',
           '@@||googlevideo.com^$~third-party',
           '@@||ytimg.com^$~third-party',
           '@@||ggpht.com^$~third-party',
+          '@@||googleusercontent.com^$~third-party',
+          // 额外兜底：YouTube 广告相关接口
+          '||youtube.com/pagead^',
+          '||youtube.com/ptracking^',
+          '||youtube.com/api/stats/ads^',
+          '||youtube.com/get_midroll_^',
+          '||doubleclick.net^',
+          '||googleadservices.com^',
+          '||googlesyndication.com^',
+          '||googleads.g.doubleclick.net^',
         ],
       });
     } catch (e) {
