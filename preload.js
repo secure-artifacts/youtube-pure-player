@@ -1848,13 +1848,18 @@ function setupCloseOnEnd() {
       if (!closeOnEndEnabled()) return;
       const v = e.target;
       if (!v || v.tagName !== 'VIDEO') return;
-      // 广告结束不要关软件，只在正片播完时关闭
+      // 广告结束 / 广告残留状态不要关软件
+      if (document.documentElement.classList.contains('ypp-ad-active')) return;
       const player = v.closest('.html5-video-player');
       if (
         player &&
         (player.classList.contains('ad-showing') ||
           player.classList.contains('ad-interrupting'))
       ) {
+        return;
+      }
+      // 几乎没播过就 ended（常见于广告快进误伤），不关软件
+      if (!isFinite(v.duration) || v.duration < 3 || v.currentTime < Math.min(2, v.duration * 0.05)) {
         return;
       }
       ipcRenderer.send('win-close');
@@ -1872,44 +1877,52 @@ function setupAdSkipper() {
   let observed = null;
   let savedVolBeforeAd = null; // 广告前的音量，结束后还原
 
+  const isVisibleEl = (el) => {
+    if (!el) return false;
+    try {
+      const s = window.getComputedStyle(el);
+      if (s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) {
+        return false;
+      }
+      const r = el.getBoundingClientRect();
+      return r.width > 2 && r.height > 2;
+    } catch (_) {
+      return false;
+    }
+  };
+
   const isAdShowing = (player) => {
     if (!player) return false;
+    // 以播放器 class 为准（最可靠）；DOM 里残留的隐藏广告节点不算广告
     if (
       player.classList.contains('ad-showing') ||
       player.classList.contains('ad-interrupting')
     ) {
       return true;
     }
-    // 额外信号：广告遮罩 / 跳过按钮 / 广告倒计时
-    if (
-      player.querySelector(
-        '.ytp-ad-player-overlay, .ytp-ad-player-overlay-layout, .ytp-ad-text, .ytp-ad-preview-container, .ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern'
-      )
-    ) {
-      return true;
+    const candidates = player.querySelectorAll(
+      '.ytp-ad-player-overlay, .ytp-ad-player-overlay-layout, .ytp-ad-preview-container, .ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern'
+    );
+    for (const el of candidates) {
+      if (isVisibleEl(el)) return true;
     }
-    try {
-      if (typeof player.getPlayerResponse === 'function') {
-        const r = player.getPlayerResponse();
-        if (r && r.adPlacements && r.adPlacements.length) {
-          // 有广告配置不代表正在播，仅作辅助；主要靠 class
-        }
-      }
-    } catch (_) {}
     return false;
   };
 
-  const forceMuteAd = (player, video) => {
+  const forceMuteAd = (player, video, hardSeek) => {
     document.documentElement.classList.add('ypp-ad-active');
     if (video) {
       try {
         video.muted = true;
         video.volume = 0;
-        video.playbackRate = 16;
-        if (isFinite(video.duration) && video.duration > 0) {
-          try {
-            video.currentTime = Math.max(0, video.duration - 0.05);
-          } catch (_) {}
+        // 只在确认是广告 class 时才快进，避免误判把正片拖到结尾导致“闪退感”
+        if (hardSeek) {
+          video.playbackRate = 16;
+          if (isFinite(video.duration) && video.duration > 0) {
+            try {
+              video.currentTime = Math.max(0, video.duration - 0.05);
+            } catch (_) {}
+          }
         }
       } catch (_) {}
     }
@@ -1994,6 +2007,10 @@ function setupAdSkipper() {
       }
 
       if (isAdShowing(player)) {
+        const hardSeek =
+          !!player &&
+          (player.classList.contains('ad-showing') ||
+            player.classList.contains('ad-interrupting'));
         if (!adActive) {
           // 记住广告前音量，结束后还原；广告期间绝不放声
           const cur =
@@ -2005,7 +2022,7 @@ function setupAdSkipper() {
           savedVolBeforeAd = cur;
           adActive = true;
         }
-        forceMuteAd(player, video);
+        forceMuteAd(player, video, hardSeek);
         clickSkip();
       } else {
         clickSkip(); // 清掉残留悬浮广告
@@ -2033,7 +2050,11 @@ function setupAdSkipper() {
       if (!adblockEnabled()) return;
       const player = e.target.closest('.html5-video-player');
       if (isAdShowing(player) || document.documentElement.classList.contains('ypp-ad-active')) {
-        forceMuteAd(player, e.target);
+        const hardSeek =
+          !!player &&
+          (player.classList.contains('ad-showing') ||
+            player.classList.contains('ad-interrupting'));
+        forceMuteAd(player, e.target, hardSeek);
       }
       handle();
     },
@@ -2052,7 +2073,11 @@ function setupAdSkipper() {
         isAdShowing(player) ||
         document.documentElement.classList.contains('ypp-ad-active')
       ) {
-        forceMuteAd(player, e.target);
+        const hardSeek =
+          !!player &&
+          (player.classList.contains('ad-showing') ||
+            player.classList.contains('ad-interrupting'));
+        forceMuteAd(player, e.target, hardSeek);
       }
     },
     true

@@ -1,9 +1,16 @@
 const { app, BrowserWindow, session, ipcMain, Menu, screen } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 // 广告屏蔽器在向部分广告/沙箱 iframe 注入隐藏脚本时会偶发被拒，
 // 属于正常现象，这里静默处理，避免控制台噪音。
 process.on('unhandledRejection', () => {});
+process.on('uncaughtException', (err) => {
+  try {
+    const line = `[${new Date().toISOString()}] uncaughtException: ${err && err.stack ? err.stack : err}\n`;
+    fs.appendFileSync(path.join(app.getPath('userData'), 'crash.log'), line);
+  } catch (_) {}
+});
 
 // 广告屏蔽器会按 iframe 数量添加监听器，适当提高上限避免警告。
 require('events').EventEmitter.defaultMaxListeners = 50;
@@ -20,7 +27,6 @@ let adblockEnabled = true;
 // 应用级设置持久化（窗口大小/位置、YouTube 语言等），存到 userData/app-settings.json
 // 关闭后再打开会自动恢复。
 // ---------------------------------------------------------------------------
-const fs = require('fs');
 let appSettings = {};
 function settingsFile() {
   return path.join(app.getPath('userData'), 'app-settings.json');
@@ -166,11 +172,27 @@ function createWindow() {
   mainWindow.on('resize', persistBounds);
   mainWindow.on('move', persistBounds);
 
-  // 去掉系统菜单栏，界面更干净
+  // 关掉系统菜单栏，界面更干净
   Menu.setApplicationMenu(null);
 
   // 阻止页面标题修改窗口/任务栏标题，避免显示 “YouTube”
   mainWindow.on('page-title-updated', (e) => e.preventDefault());
+
+  // 记录渲染进程异常退出，便于排查“闪退”
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    try {
+      const line = `[${new Date().toISOString()}] render-process-gone: ${JSON.stringify(details)}\n`;
+      fs.appendFileSync(path.join(app.getPath('userData'), 'crash.log'), line);
+    } catch (_) {}
+  });
+  mainWindow.webContents.on('unresponsive', () => {
+    try {
+      fs.appendFileSync(
+        path.join(app.getPath('userData'), 'crash.log'),
+        `[${new Date().toISOString()}] webContents unresponsive\n`
+      );
+    } catch (_) {}
+  });
 
   setupAdBlocker(ses);
 
