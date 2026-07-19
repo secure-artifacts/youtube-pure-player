@@ -1,6 +1,6 @@
 {
   "name": "youtube-pure-player",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "YouTube Pure Player：极简视频播放器，仅显示画面，可登录，内置广告屏蔽",
   "main": "main.js",
   "scripts": {
